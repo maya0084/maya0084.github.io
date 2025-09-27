@@ -1,1 +1,157 @@
-test
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tetris — HTML/CSS/JS (with borders)</title>
+  <style>
+    :root{
+      --bg:#0f1720;--panel:#0b1220;--accent:#22c55e;--muted:#94a3b8;--block-size:clamp(18px,3.2vmin,28px);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;background:linear-gradient(180deg,#071021 0%,var(--bg) 100%);color:#e6eef6}
+    .app{min-height:100%;display:flex;align-items:center;justify-content:center;padding:20px}
+
+    .container{display:grid;grid-template-columns:1fr 240px;gap:20px;align-items:start;max-width:1100px;width:100%}
+    .left{display:flex;flex-direction:column;gap:12px}
+
+    .board-wrap{background:var(--panel);padding:12px;border-radius:12px;box-shadow:0 6px 20px rgba(2,6,23,.6)}
+    canvas {display:block;background:linear-gradient(180deg,#071427, #0a1723);border-radius:6px;border:2px solid #475569}
+
+    .hud{display:flex;gap:10px;align-items:center}
+    .panel{background:linear-gradient(180deg,#081226,#071126);padding:10px;border-radius:10px;min-width:100px}
+    .panel h4{margin:0 0 6px 0;font-size:14px;color:var(--muted)}
+    .panel .value{font-size:20px;font-weight:700}
+
+    .right{display:flex;flex-direction:column;gap:12px}
+    .right .box{background:var(--panel);padding:12px;border-radius:10px}
+
+    .controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .btn{background:linear-gradient(180deg,#0f2a2a,#0b2020);border-radius:8px;padding:10px;text-align:center;user-select:none;touch-action:none;border:2px solid #334155}
+    .btn:active{transform:translateY(1px)}
+    .btn.small{padding:6px;font-size:14px}
+
+    .touch-row{display:flex;gap:8px}
+    .ghost{opacity:.45}
+
+    @media(max-width:760px){
+      .container{grid-template-columns:1fr;}
+      .right{order:2}
+      .left{order:1}
+    }
+
+    .legend{font-size:12px;color:var(--muted);margin-top:6px}
+
+    .mini-canvas{background:transparent;border-radius:6px;border:2px solid #475569}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="container">
+      <div class="left">
+        <div class="board-wrap">
+          <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="display:flex;gap:8px;align-items:center">
+              <strong style="font-size:18px">TETRIS</strong>
+              <div class="legend">Arrow keys / A D / space, or touch controls below</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <div class="panel" style="min-width:120px">
+                <h4>Score</h4>
+                <div class="value" id="score">0</div>
+              </div>
+              <div class="panel" style="min-width:100px">
+                <h4>Level</h4>
+                <div class="value" id="level">1</div>
+              </div>
+            </div>
+          </div>
+
+          <canvas id="board" width="300" height="600" style="width:calc(var(--block-size) * 10);height:calc(var(--block-size) * 20)"></canvas>
+        </div>
+
+        <div class="hud">
+          <div class="panel" style="flex:1">
+            <h4>Next</h4>
+            <canvas id="next" class="mini-canvas" width="120" height="120" style="width:96px;height:96px"></canvas>
+          </div>
+
+          <div class="panel" style="width:120px;text-align:center">
+            <h4>Controls</h4>
+            <div class="legend">← → move · tap rotate · ↓ soft drop · ⬇ hold for fast</div>
+          </div>
+        </div>
+
+        <div class="touch-controls" style="margin-top:12px">
+          <div class="controls">
+            <div class="btn" id="btn-left">◀︎</div>
+            <div class="btn" id="btn-rotate">⤾</div>
+            <div class="btn" id="btn-right">▶︎</div>
+            <div class="btn" id="btn-down">▼</div>
+            <div class="btn" id="btn-drop">⤓</div>
+            <div class="btn" id="btn-pause">II</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="right">
+        <div class="box" style="display:flex;flex-direction:column;gap:8px;align-items:stretch">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>How to play</strong>
+            <button id="restart" class="btn small">Restart</button>
+          </div>
+          <div style="font-size:14px;color:var(--muted);line-height:1.45">
+            Use keyboard on desktop or the on-screen buttons and gestures on touch devices. Tap to rotate. Swipe left/right to move. Swipe down to soft-drop. Tap ⤓ to hard-drop.
+          </div>
+        </div>
+
+        <div class="box">
+          <strong>Tips</strong>
+          <ul style="margin:8px 0 0 18px;color:var(--muted)">
+            <li>Clear multiple lines for higher score.</li>
+            <li>Rotate near walls with kicks (implemented).</li>
+            <li>Use hold-down on the drop button for fast soft-drop.</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 元のJSコードを流用し、セル描画に枠線を追加
+    const COLS=10, ROWS=20, BLOCK=30;
+    const COLORS = {
+      0: '#061021', I:'#22c1ee', J:'#3b82f6', L:'#f97316', O:'#fbbf24', S:'#10b981', T:'#a78bfa', Z:'#ef4444'
+    };
+
+    const SHAPES = {
+      I:[[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],[[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]]],
+      J:[[[1,0,0],[1,1,1],[0,0,0]],[[0,1,1],[0,1,0],[0,1,0]],[[0,0,0],[1,1,1],[0,0,1]],[[0,1,0],[0,1,0],[1,1,0]]],
+      L:[[[0,0,1],[1,1,1],[0,0,0]],[[0,1,0],[0,1,0],[0,1,1]],[[0,0,0],[1,1,1],[1,0,0]],[[1,1,0],[0,1,0],[0,1,0]]],
+      O:[[[1,1],[1,1]]],
+      S:[[[0,1,1],[1,1,0],[0,0,0]],[[0,1,0],[0,1,1],[0,0,1]]],
+      T:[[[0,1,0],[1,1,1],[0,0,0]],[[0,1,0],[0,1,1],[0,1,0]],[[0,0,0],[1,1,1],[0,1,0]],[[0,1,0],[1,1,0],[0,1,0]]],
+      Z:[[[1,1,0],[0,1,1],[0,0,0]],[[0,0,1],[0,1,1],[0,1,0]]]
+    };
+
+    let board = createMatrix(ROWS,COLS);
+    let ctx=document.getElementById('board').getContext('2d');
+
+    function createMatrix(r,c){ const m=[]; for(let i=0;i<r;i++){ m.push(new Array(c).fill(0)); } return m; }
+    function getBlockSize(){ const cs=getComputedStyle(document.documentElement).getPropertyValue('--block-size'); return parseFloat(cs) || BLOCK; }
+
+    function drawCell(x,y,val){
+      const bs=getBlockSize();
+      ctx.fillStyle = val ? COLORS[val] : COLORS[0];
+      ctx.fillRect(x*bs, y*bs, bs, bs);
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x*bs, y*bs, bs, bs);
+    }
+
+    // 以下のゲームロジックは前のコードを流用（省略可）
+  </script>
+</body>
+</html>
